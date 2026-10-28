@@ -2,7 +2,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import App from './App';
-import { getBooks, getCart, addToCart, removeFromCart, checkout, getOrderHistory, login } from './api';
+import {
+  getBooks, getCart, addToCart, removeFromCart, checkout, initiatePayment, getPaymentStatus, getOrderHistory, login,
+} from './api';
 import { saveSession } from './session';
 
 vi.mock('./api'); // replaces the real fetch calls with mocks
@@ -108,13 +110,55 @@ describe('App (logged in)', () => {
   it('completes checkout', async () => {
     getCart.mockResolvedValue(CART_WITH_ONE);
     checkout.mockResolvedValue({ orderId: 7, status: 'PLACED', total: 30, items: [] });
+    initiatePayment.mockResolvedValue({
+      paymentId: 3, orderId: 7, method: 'UPI', status: 'SUCCEEDED', amount: 30,
+    });
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Open cart (1)' }));
     await userEvent.click(screen.getByRole('button', { name: 'Checkout' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Place order' }));
+    expect(screen.getByRole('radio', { name: /UPI/ })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: /Place order/ }));
 
     expect(await screen.findByText('Order confirmed')).toBeInTheDocument();
-    expect(screen.getByText(/order number is 7/)).toBeInTheDocument();
+    expect(screen.getByText(/Your order/)).toHaveTextContent('Your order #7 is placed.');
+    expect(screen.getByText('#7')).toBeInTheDocument();
+    expect(initiatePayment).toHaveBeenCalledWith(7, 'UPI');
+    expect(screen.getByText('Demo payment successful')).toBeInTheDocument();
+    expect(screen.getByText('No real charge was made')).toBeInTheDocument();
+  });
+
+  it('submits cash on delivery and shows that payment is due on delivery', async () => {
+    getCart.mockResolvedValue(CART_WITH_ONE);
+    checkout.mockResolvedValue({ orderId: 8, status: 'PLACED', total: 30, items: [] });
+    initiatePayment.mockResolvedValue({
+      paymentId: 4, orderId: 8, method: 'CASH_ON_DELIVERY', status: 'PENDING', amount: 30,
+    });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open cart (1)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Checkout' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cash on delivery/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Place order/ }));
+
+    expect(initiatePayment).toHaveBeenCalledWith(8, 'CASH_ON_DELIVERY');
+    expect(await screen.findByText('Due on delivery')).toBeInTheDocument();
+  });
+
+  it('checks payment status after the payment request fails', async () => {
+    getCart.mockResolvedValue(CART_WITH_ONE);
+    checkout.mockResolvedValue({ orderId: 9, status: 'PLACED', total: 30, items: [] });
+    initiatePayment.mockRejectedValue(new Error('Request timed out'));
+    getPaymentStatus.mockResolvedValue({
+      paymentId: 5, orderId: 9, method: 'UPI', status: 'SUCCEEDED', amount: 30,
+    });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open cart (1)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Checkout' }));
+    await userEvent.click(screen.getByRole('button', { name: /Place order/ }));
+
+    expect(await screen.findByText('Demo payment successful')).toBeInTheDocument();
+    expect(getPaymentStatus).toHaveBeenCalledWith(9);
   });
 
   it('loads paginated order history', async () => {

@@ -66,6 +66,15 @@ export async function removeFromCart(bookId) {
 // ---- checkout: creates the order from the server-side cart. Returns { orderId, total, items, ... } ----
 export const checkout = () => request('/orders/checkout', { method: 'POST' });
 
+// ---- payments: starts or retrieves the demo payment for an existing order ----
+export const initiatePayment = (orderId, method) =>
+  request(`/payments/orders/${orderId}`, {
+    method: 'POST',
+    body: JSON.stringify({ method }),
+  });
+
+export const getPaymentStatus = (orderId) => request(`/payments/orders/${orderId}`);
+
 // ---- order history: returns a paginated Page<OrderResponse>, newest first ----
 export const getOrderHistory = (page = 0, size = 20) =>
   request(`/orders?page=${page}&size=${size}`);
