@@ -16,6 +16,7 @@ npm test
 Tests mock `src/api.js`, so they run without the backend.
 
 ## How it works with the backend
+- To make the UI functional the backend should be started in localhost:8080
 - Browsing books is public (`GET /api/books`, paginated; the UI loads the first 100).
 - Add to cart / cart page / checkout need a login. Register or log in, and the JWT is kept in `localStorage`; every API call sends `Authorization: Bearer <token>`.
 - The cart lives on the server (`/api/cart/...`); each call returns the updated cart, which the UI displays.
